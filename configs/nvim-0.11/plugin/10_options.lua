@@ -22,7 +22,8 @@
 -- General ====================================================================
 vim.g.mapleader = ' ' -- Use `<Space>` as <Leader> key
 
-vim.o.mouse       = 'a'            -- Enable mouse
+vim.o.shell       = '/usr/bin/zsh'                   -- Set shell for :term commands
+vim.o.mouse       = 'nci'                            -- Enable mouse (disable visual mode 'a')
 vim.o.mousescroll = 'ver:25,hor:6' -- Customize mouse scroll
 vim.o.switchbuf   = 'usetab'       -- Use already opened buffers when switching
 vim.o.undofile    = true           -- Enable persistent undo
@@ -39,7 +40,7 @@ vim.o.breakindentopt = 'list:-1'  -- Add padding for lists (if 'wrap' is set)
 vim.o.colorcolumn    = '+1'       -- Draw column on the right of maximum width
 vim.o.cursorline     = true       -- Enable current line highlighting
 vim.o.linebreak      = true       -- Wrap lines at 'breakat' (if 'wrap' is set)
-vim.o.list           = true       -- Show helpful text indicators
+-- vim.o.list           = true       -- Show helpful text indicators (commented to hide tab chars)
 vim.o.number         = true       -- Show line numbers
 vim.o.pumheight      = 10         -- Make popup menu smaller
 vim.o.ruler          = false      -- Don't show cursor coordinates
@@ -50,7 +51,7 @@ vim.o.splitbelow     = true       -- Horizontal splits will be below
 vim.o.splitkeep      = 'screen'   -- Reduce scroll during window split
 vim.o.splitright     = true       -- Vertical splits will be to the right
 vim.o.winborder      = 'single'   -- Use border in floating windows
-vim.o.wrap           = false      -- Don't visually wrap lines (toggle with \w)
+vim.o.wrap           = true       -- Don't visually wrap lines (toggle with \w)
 
 vim.o.cursorlineopt  = 'screenline,number' -- Show cursor line per screen line
 
@@ -110,11 +111,22 @@ local diagnostic_opts = {
   -- Show all diagnostics as underline (for their messages type `<Leader>ld`)
   underline = { severity = { min = 'HINT', max = 'ERROR' } },
 
-  -- Show more details immediately for errors on the current line
+  -- Show inline diagnostics on all lines with fancy icons (toggle with <Leader>od)
   virtual_lines = false,
   virtual_text = {
-    current_line = true,
-    severity = { min = 'ERROR', max = 'ERROR' },
+    severity = { min = 'WARN', max = 'ERROR' },  -- Show warnings and errors
+    spacing = 4,  -- Add 4 spaces before message for readability
+    source = 'if_many',  -- Show source if multiple LSPs provide diagnostics
+    prefix = function(diagnostic, i, total)
+      -- Custom icons based on severity
+      local icons = {
+        [vim.diagnostic.severity.ERROR] = '✘',
+        [vim.diagnostic.severity.WARN] = '▲',
+        [vim.diagnostic.severity.INFO] = '',
+        [vim.diagnostic.severity.HINT] = '',
+      }
+      return icons[diagnostic.severity] or '●'
+    end,
   },
 
   -- Don't update diagnostics when typing

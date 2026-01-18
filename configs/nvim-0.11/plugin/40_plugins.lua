@@ -119,13 +119,53 @@ later(function()
   -- - `:h conform-options`
   -- - `:h conform-formatters`
   require('conform').setup({
-    default_format_opts = {
-      -- Allow formatting from LSP server if no dedicated formatter is available
-      lsp_format = 'fallback',
+    notify_on_error = false,
+    format_on_save = function(bufnr)
+      -- Disable "format_on_save lsp_fallback" for languages that don't
+      -- have a well standardized coding style. You can add additional
+      -- languages here or re-enable it for the disabled ones.
+      local disable_filetypes = { c = true, cpp = true }
+      if disable_filetypes[vim.bo[bufnr].filetype] then
+        return nil
+      else
+        return {
+          timeout_ms = 500,
+          lsp_format = 'fallback',
+        }
+      end
+    end,
+    formatters_by_ft = {
+      lua = { 'stylua' },
+      javascript = { 'prettierd', 'prettier', stop_after_first = true },
+      html = { 'prettierd', 'prettier', stop_after_first = true },
+      css = { 'prettierd', 'prettier', stop_after_first = true },
+      sh = { 'shfmt' },
+      bash = { 'shfmt' },
+      zsh = { 'shfmt' },
+      markdown = { 'markdownlint-cli2' },
+      caddy = { 'caddy_fmt' },
+      json = { 'jq' },
+      terraform = { 'terraform_fmt' },
+      tf = { 'terraform_fmt' },
+      -- Conform can also run multiple formatters sequentially
+      -- python = { "isort", "black" },
+      --
+      -- You can use 'stop_after_first' to run the first available formatter from the list
+      -- javascript = { "prettierd", "prettier", stop_after_first = true },
     },
-    -- Map of filetype to formatters
-    -- Make sure that necessary CLI tool is available
-    -- formatters_by_ft = { lua = { 'stylua' } },
+
+    formatters = {
+      caddy_fmt = {
+        command = 'caddy',
+        args = { 'fmt', '-' },
+        stdin = true,
+      },
+      terraform_fmt = {
+        command = 'terraform',
+        args = { 'fmt', '-' },
+        stdin = true,
+      },
+    },
   })
 end)
 
