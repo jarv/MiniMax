@@ -19,6 +19,23 @@ end
 nmap('[p', '<Cmd>exe "iput! " . v:register<CR>', 'Paste Above')
 nmap(']p', '<Cmd>exe "iput "  . v:register<CR>', 'Paste Below')
 
+-- Cycle between buffers with Tab and Shift-Tab
+nmap('<Tab>', '<Cmd>bnext<CR>', 'Next buffer')
+nmap('<S-Tab>', '<Cmd>bprevious<CR>', 'Previous buffer')
+
+-- Open URL under cursor with Ctrl-Click or gx
+-- Usage: Move cursor over a URL and press `gx` or Ctrl-Click to open in browser
+_G.open_url = function()
+  local url = vim.fn.expand('<cfile>')
+  if url:match('^https?://') then
+    vim.ui.open(url)
+  else
+    vim.notify('No URL found under cursor', vim.log.levels.WARN)
+  end
+end
+nmap('gx', _G.open_url, 'Open URL')
+nmap('<C-LeftMouse>', '<LeftMouse><Cmd>lua open_url()<CR>', 'Open URL')
+
 -- Many general mappings are created by 'mini.basics'. See 'plugin/30_mini.lua'
 
 -- stylua: ignore start
@@ -51,16 +68,18 @@ nmap(']p', '<Cmd>exe "iput "  . v:register<CR>', 'Paste Below')
 -- Add an entry if you create a new group.
 Config.leader_group_clues = {
   { mode = 'n', keys = '<Leader>b', desc = '+Buffer' },
+  { mode = 'n', keys = '<Leader>c', desc = '+Code Assistant' },
   { mode = 'n', keys = '<Leader>e', desc = '+Explore/Edit' },
   { mode = 'n', keys = '<Leader>f', desc = '+Find' },
   { mode = 'n', keys = '<Leader>g', desc = '+Git' },
   { mode = 'n', keys = '<Leader>l', desc = '+Language' },
   { mode = 'n', keys = '<Leader>m', desc = '+Map' },
   { mode = 'n', keys = '<Leader>o', desc = '+Other' },
-  { mode = 'n', keys = '<Leader>s', desc = '+Session' },
+  { mode = 'n', keys = '<Leader>s', desc = '+Search/Session' },
   { mode = 'n', keys = '<Leader>t', desc = '+Terminal' },
   { mode = 'n', keys = '<Leader>v', desc = '+Visits' },
 
+  { mode = 'x', keys = '<Leader>c', desc = '+Code Assistant' },
   { mode = 'x', keys = '<Leader>g', desc = '+Git' },
   { mode = 'x', keys = '<Leader>l', desc = '+Language' },
 }
@@ -75,6 +94,9 @@ local nmap_leader = function(suffix, rhs, desc)
 end
 local xmap_leader = function(suffix, rhs, desc)
   vim.keymap.set('x', '<Leader>' .. suffix, rhs, { desc = desc })
+end
+local map_leader = function(modes, suffix, rhs, desc)
+  vim.keymap.set(modes, '<Leader>' .. suffix, rhs, { desc = desc })
 end
 
 -- b is for 'Buffer'. Common usage:
@@ -108,6 +130,7 @@ local explore_locations = function()
   vim.cmd(vim.fn.getloclist(0, { winid = true }).winid ~= 0 and 'lclose' or 'lopen')
 end
 
+nmap_leader('e',  '<Cmd>lua MiniFiles.open()<CR>',          'Explorer')
 nmap_leader('ed', '<Cmd>lua MiniFiles.open()<CR>',          'Directory')
 nmap_leader('ef', explore_at_file,                          'File directory')
 nmap_leader('ei', '<Cmd>edit $MYVIMRC<CR>',                 'init.lua')
@@ -160,6 +183,7 @@ nmap_leader('fV', '<Cmd>Pick visit_paths<CR>',                  'Visit paths (cw
 -- - `<Leader>go` - toggle 'mini.diff' overlay to show in-buffer unstaged changes
 -- - `<Leader>gd` - show unstaged changes as a patch in separate tabpage
 -- - `<Leader>gL` - show Git log of current file
+-- - `<Leader>gy` - copy git permalink to clipboard (visual: with line range)
 local git_log_cmd = [[Git log --pretty=format:\%h\ \%as\ │\ \%s --topo-order]]
 local git_log_buf_cmd = git_log_cmd .. ' --follow -- %'
 
@@ -175,6 +199,49 @@ nmap_leader('go', '<Cmd>lua MiniDiff.toggle_overlay()<CR>', 'Toggle overlay')
 nmap_leader('gs', '<Cmd>lua MiniGit.show_at_cursor()<CR>',  'Show at cursor')
 
 xmap_leader('gs', '<Cmd>lua MiniGit.show_at_cursor()<CR>', 'Show at selection')
+
+local git_cmd = function(args, cwd)
+  local out = vim.system(args, { text = true, cwd = cwd }):wait()
+  if out.code ~= 0 then return nil end
+  return vim.trim(out.stdout)
+end
+
+local git_link = function()
+  local file = vim.api.nvim_buf_get_name(0)
+  if file == '' then return vim.notify('Buffer has no file', vim.log.levels.WARN) end
+  local dir = vim.fn.fnamemodify(file, ':h')
+  local root = git_cmd({ 'git', 'rev-parse', '--show-toplevel' }, dir)
+  if not root then return vim.notify('Not a git repo', vim.log.levels.WARN) end
+  local rel = file:sub(#root + 2)
+  local rev = git_cmd({ 'git', 'rev-parse', 'HEAD' }, root)
+  if not rev then return vim.notify('No commits yet', vim.log.levels.WARN) end
+  local remote = git_cmd({ 'git', 'remote', 'get-url', 'origin' }, root)
+  if not remote then return vim.notify('No origin remote', vim.log.levels.WARN) end
+
+  local host, path = remote:match('git@([^:]+):(.+)')
+  if not host then host, path = remote:match('https?://([^/]+)/(.+)') end
+  if not path then return vim.notify('Cannot parse remote: ' .. remote, vim.log.levels.WARN) end
+  path = path:gsub('%.git$', '')
+
+  local url = string.format('https://%s/%s/blob/%s/%s', host, path, rev, rel)
+
+  local mode = vim.fn.mode()
+  if mode == 'v' or mode == 'V' or mode == '\22' then
+    local l1, l2 = vim.fn.line('v'), vim.fn.line('.')
+    if l1 > l2 then l1, l2 = l2, l1 end
+    if host:match('gitlab') then
+      url = url .. '#L' .. l1 .. '-' .. l2
+    else
+      url = url .. '#L' .. l1 .. '-L' .. l2
+    end
+  end
+
+  vim.fn.setreg('+', url)
+  vim.notify(url, vim.log.levels.INFO)
+end
+
+nmap_leader('gy', git_link,                                  'Copy git link')
+xmap_leader('gy', git_link,                                  'Copy git link (lines)')
 
 -- l is for 'Language'. Common usage:
 -- - `<Leader>ld` - show more diagnostic details in a floating window
@@ -246,4 +313,91 @@ nmap_leader('vv', '<Cmd>lua MiniVisits.add_label("core")<CR>',    'Add "core" la
 nmap_leader('vV', '<Cmd>lua MiniVisits.remove_label("core")<CR>', 'Remove "core" label')
 nmap_leader('vl', '<Cmd>lua MiniVisits.add_label()<CR>',          'Add label')
 nmap_leader('vL', '<Cmd>lua MiniVisits.remove_label()<CR>',       'Remove label')
+
+-- Toggle virtual text diagnostics ============================================
+-- Custom toggle for showing/hiding inline diagnostic messages
+-- Usage: `<Leader>od` to toggle inline diagnostics on/off
+--
+-- Note: This is different from `\d` (mini.basics) which disables/enables
+-- all diagnostics. This toggle only affects the inline text display.
+
+-- Store the current virtual text state globally
+_G.diagnostic_virtual_text_enabled = true
+
+-- Toggle function
+_G.toggle_diagnostic_virtual_text = function()
+  _G.diagnostic_virtual_text_enabled = not _G.diagnostic_virtual_text_enabled
+
+  if _G.diagnostic_virtual_text_enabled then
+    -- Enable virtual text with fancy icons
+    vim.diagnostic.config({
+      virtual_text = {
+        severity = { min = vim.diagnostic.severity.WARN, max = vim.diagnostic.severity.ERROR },
+        spacing = 4,
+        source = 'if_many',
+        prefix = function(diagnostic)
+          local icons = {
+            [vim.diagnostic.severity.ERROR] = '✘',
+            [vim.diagnostic.severity.WARN] = '▲',
+            [vim.diagnostic.severity.INFO] = '',
+            [vim.diagnostic.severity.HINT] = '',
+          }
+          return icons[diagnostic.severity] or '●'
+        end,
+      },
+    })
+    vim.notify('Inline diagnostics enabled', vim.log.levels.INFO)
+  else
+    -- Disable virtual text
+    vim.diagnostic.config({ virtual_text = false })
+    vim.notify('Inline diagnostics disabled', vim.log.levels.INFO)
+  end
+end
+
+-- Create the keymap
+nmap_leader('od', '<Cmd>lua toggle_diagnostic_virtual_text()<CR>', 'Toggle inline diagnostics')
+
+-- Custom Keymap Additions ====================================================
+
+-- c is for 'Code Assistant' (OpenCode). Common usage:
+-- - `<Leader>ca` - ask OpenCode a question
+-- - `<Leader>ct` - toggle OpenCode panel
+-- - `<Leader>cx` - execute an OpenCode action
+--
+-- Note: OpenCode plugin setup is in 'plugin/40_plugins.lua'
+
+-- OpenCode main actions
+map_leader({ 'n', 'x' }, 'ca', function()
+  require('opencode').ask('@this: ', { submit = true })
+end, 'Ask opencode')
+
+map_leader({ 'n', 'x' }, 'cx', function()
+  require('opencode').select()
+end, 'Execute action')
+
+map_leader({ 'n', 'x' }, 'cp', function()
+  require('opencode').prompt('@this')
+end, 'Add to prompt')
+
+map_leader({ 'n', 't' }, 'ct', function()
+  require('opencode').toggle()
+end, 'Toggle panel')
+
+-- OpenCode navigation
+map_leader({ 'n', 't' }, 'cu', function()
+  require('opencode').command('session.half.page.up')
+end, 'Scroll up')
+
+map_leader({ 'n', 't' }, 'cd', function()
+  require('opencode').command('session.half.page.down')
+end, 'Scroll down')
+
+map_leader({ 'n', 't' }, 'cgg', function()
+  require('opencode').command('session.first')
+end, 'First message')
+
+map_leader({ 'n', 't' }, 'cG', function()
+  require('opencode').command('session.last')
+end, 'Last message')
+
 -- stylua: ignore end
