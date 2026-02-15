@@ -1,6 +1,7 @@
 -- Determine the correct MiniMax version (if any)
 local version
 if vim.fn.has('nvim-0.11') == 1 then version = 'nvim-0.11' end
+if vim.fn.has('nvim-0.12') == 1 then version = 'nvim-0.12' end
 if version == nil then
   print('There is no available MiniMax version. Try updating Neovim.\n')
   return
@@ -48,6 +49,7 @@ end
 local safely_copy
 safely_copy = function(rel_path, skip_if_present)
   local from = version_dir .. '/' .. rel_path
+  if vim.loop.fs_stat(from) == nil then return end
   local to = config_dir .. '/' .. rel_path
   if skip_if_present and vim.loop.fs_stat(to) ~= nil then
     print('Skipped copy:\n  ' .. rel_path)
@@ -68,6 +70,7 @@ safely_copy = function(rel_path, skip_if_present)
 end
 
 safely_copy('init.lua')
+safely_copy('nvim-pack-lock.json')
 safely_copy('plugin') -- Back up whole 'plugin/' directory to avoid config conflicts
 safely_copy('after/ftplugin/markdown.lua', true) -- Prefer user's existing files
 safely_copy('after/lsp/lua_ls.lua', true)
