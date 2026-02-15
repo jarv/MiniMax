@@ -4,17 +4,18 @@ The most appropriate one based on Neovim version is chosen during initial config
 
 Available:
 
+- [`nvim-0.10`](nvim-0.10) - for Neovim>=0.10
 - [`nvim-0.11`](nvim-0.11) - for Neovim>=0.11
 - [`nvim-0.12`](nvim-0.12) - for Neovim>=0.12 (currently under development)
 
 Differences between selected configs:
 
+- [Between `nvim-0.10` and `nvim-0.11`](https://nvim-mini.org/MiniMax/configs/diffs/nvim-0.10_nvim-0.11)
 - [Between `nvim-0.11` and `nvim-0.12`](https://nvim-mini.org/MiniMax/configs/diffs/nvim-0.11_nvim-0.12)
 
 Planned (after some time of 'nvim-0.11' public testing):
 
 - `nvim-0.9` - for Neovim>=0.9
-- `nvim-0.10` - for Neovim>=0.10
 
 ### Structure
 
